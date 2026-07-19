@@ -1,0 +1,8 @@
+{
+    "id": "carrera_de_obstaculos",
+    "title": "Carrera de Obstáculos",
+    "description": "Juego de carrera de obstáculos",
+    "authors": ["Gabriel Mejias", "Sofia Marquez"],
+    "group_number": 7,
+    "cover_path": "assets/covers/carrera_de_obstaculos.jpg"
+}

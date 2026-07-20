@@ -1,7 +1,7 @@
 # entities.py
 import pygame
 import random
-from settings import GRAVITY, JUMP_FORCE
+from settings import GRAVITY, JUMP_FORCE, SPACE_JUMP_FORCE
 
 class Player:
     def __init__(self, x, y, w, h, ground_y):
@@ -9,20 +9,63 @@ class Player:
         self.vy = 0
         self.ground_y = ground_y
         self.holding_jump = False
+        self.fast_fall = False
+        self.holding_down = False
+        self.space_jumping = False
+        self.last_space_jump_time = 0
 
     def jump(self):
-        if self.rect.bottom >= self.ground_y:
+        if self.rect.bottom >= self.ground_y and not self.space_jumping:
+            self.vy = JUMP_FORCE
+            self.holding_jump = True
+
+    def keep_jump(self):
+        if self.rect.bottom >= self.ground_y and not self.holding_jump:
             self.vy = JUMP_FORCE
             self.holding_jump = True
 
     def release_jump(self):
         self.holding_jump = False
 
+    def start_space_jump(self):
+        self.space_jumping = True
+        self.last_space_jump_time = pygame.time.get_ticks()
+        if self.rect.bottom >= self.ground_y:
+            self.vy = SPACE_JUMP_FORCE
+            self.holding_jump = True
+
+    def stop_space_jump(self):
+        self.space_jumping = False
+
+    def start_fast_fall(self):
+        if not self.space_jumping:
+            self.fast_fall = True
+            self.holding_down = True
+
+    def stop_fast_fall(self):
+        self.fast_fall = False
+        self.holding_down = False
+
     def update(self):
+        gravity = GRAVITY * 2.0 if self.fast_fall and self.vy >= 0 else GRAVITY
+
         if self.vy < 0 and self.holding_jump:
-            self.vy += GRAVITY * 0.5
+            self.vy += gravity * 0.5
         else:
-            self.vy += GRAVITY
+            self.vy += gravity
+
+        if self.fast_fall and self.rect.bottom < self.ground_y:
+            if self.vy < 0:
+                self.vy -= 0.7
+            else:
+                self.vy += GRAVITY * 0.8
+
+        if self.space_jumping and self.rect.bottom >= self.ground_y:
+            now = pygame.time.get_ticks()
+            if now - self.last_space_jump_time >= 140:
+                self.vy = SPACE_JUMP_FORCE
+                self.holding_jump = True
+                self.last_space_jump_time = now
             
         self.rect.y += self.vy
         

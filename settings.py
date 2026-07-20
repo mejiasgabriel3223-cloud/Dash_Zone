@@ -6,5 +6,6 @@ S_HEIGHT = 720
 FPS = 60
 
 # Física del juego
-GRAVITY = 1.2
-JUMP_FORCE = -15.6
+GRAVITY = 1.4
+JUMP_FORCE = -16.8
+SPACE_JUMP_FORCE = -14.4

@@ -34,6 +34,7 @@ class EstadoMenu(EstadoJuego):
         self.pending_name = None
         self.records_file = os.path.join(os.path.dirname(__file__), "records.json")
         self.records = self._load_records()
+        self.sound_player = None
 
         self.font_title = pygame.font.SysFont(None, 82)
         self.font_option = pygame.font.SysFont(None, 46)
@@ -155,6 +156,8 @@ class EstadoMenu(EstadoJuego):
         return None
 
     def actualizar(self):
+        if self.sound_player is not None and self.state == "MENU" and self.message != "":
+            pass
         return None
 
     def _draw_centered_text(self, text, y, font, color=(255, 255, 255)):

@@ -12,20 +12,15 @@ class CarreraDeObstaculos:
         self.font = pygame.font.SysFont("consolas", 24)
         self.frenzy_alert_font = pygame.font.SysFont("consolas", 48, bold=True)
         self.player_name = "Jugador"
+        self.sound_player = None
         self.reset_game()
 
     def reset_game(self):
-        """Reinicia las variables para una nueva partida"""
         self.ground_y = self.S_HEIGHT - 120
-        
-        # JUGADOR un poco más ancho
         self.player = Player(70, self.ground_y - 64, 34, 64, self.ground_y)
-        
-        # Variantes de separación: cerca, intermedio 1, intermedio 2, medio, grande
-        self.gap_variants = [20, 75, 160, 220, 300]
+        self.gap_variants = [20, 50, 160, 220, 300]
         self.player_name = getattr(self, "player_name", "Jugador")
         
-        # OBSTÁCULOS MÁS DELGADOS
         self.obstacle_types = [(16, 44), (20, 56)]
         self.obstacle_manager = ObstaclePoolManager(self.ground_y, self.obstacle_types)
         self.obstacle_manager.spawn_pair(self.S_WIDTH + 200, self.gap_variants)
@@ -38,9 +33,10 @@ class CarreraDeObstaculos:
         
         self.boost_active = False
         self.boost_multiplier = 1.0
-        self.next_boost_trigger = 200
-        self.boost_duration_points = 100
+        self.next_boost_trigger = 300
+        self.boost_duration_points = 150
         self.boost_end_score = 0
+        self.challenge_mode = False
         self.frenzy_alert_timer = 0.0
         self.frenzy_alert_active = False
         
@@ -53,41 +49,63 @@ class CarreraDeObstaculos:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 return "MENU"
                 
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_w:
-                if not self.player.space_jumping and not self.player.fast_fall:
-                    self.player.jump()
-            if event.type == pygame.KEYUP and event.key == pygame.K_w:
-                self.player.release_jump()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                if not self.player.fast_fall:
-                    self.player.stop_space_jump()
-                    self.player.start_space_jump()
-            if event.type == pygame.KEYUP and event.key == pygame.K_SPACE:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                self.challenge_mode = not self.challenge_mode
                 self.player.stop_space_jump()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
-                if not self.player.space_jumping and not self.player.holding_jump:
-                    self.player.start_fast_fall()
-            if event.type == pygame.KEYUP and event.key == pygame.K_s:
                 self.player.stop_fast_fall()
+                self.player.release_jump()
+
+            if not self.challenge_mode:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_w:
+                    if not self.player.space_jumping and not self.player.fast_fall:
+                        self.player.jump()
+                if event.type == pygame.KEYUP and event.key == pygame.K_w:
+                    self.player.release_jump()
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    if not self.player.fast_fall:
+                        self.player.stop_space_jump()
+                        self.player.start_space_jump()
+                if event.type == pygame.KEYUP and event.key == pygame.K_SPACE:
+                    self.player.stop_space_jump()
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_s:
+                    if not self.player.space_jumping and not self.player.holding_jump:
+                        self.player.start_fast_fall()
+                if event.type == pygame.KEYUP and event.key == pygame.K_s:
+                    self.player.stop_fast_fall()
         return None
 
+    def _restart_frenzy_music(self):
+        """Método protegido para reiniciar o mantener la música sin que el juego colapse"""
+        if self.sound_player is None:
+            return
+        try:
+            track = getattr(self.sound_player, "current_game_track", 0)
+            if track is None:
+                track = 0
+            if hasattr(self.sound_player, "play_game_music"):
+                self.sound_player.play_game_music(track)
+        except Exception:
+            pass
+
     def update_speed(self, dt):
-        """Acelera el juego y activa el modo frenesí según la puntuación."""
-        self.speed = self.base_speed + min(4.4, (self.score // 10) * 0.03)
+        score_points = self.score // 10
+        self.speed = self.base_speed + min(4.4, score_points * 0.03)
 
         if self.boost_active:
-            self.speed *= 1.35
+            self.speed = self.base_speed + min(4.4, score_points * 0.03) + 0.8
             self.frenzy_alert_timer += dt
-            if self.score >= self.boost_end_score:
+            if score_points >= self.boost_end_score:
                 self.boost_active = False
                 self.boost_end_score = 0
                 self.frenzy_alert_active = False
-        elif (self.score // 10) >= self.next_boost_trigger:
+                self._restart_frenzy_music()
+        elif score_points >= self.next_boost_trigger:
             self.boost_active = True
-            self.boost_end_score = self.score + self.boost_duration_points
-            self.next_boost_trigger += 200
+            self.boost_end_score = score_points + self.boost_duration_points
+            self.next_boost_trigger += 300
             self.frenzy_alert_active = True
             self.frenzy_alert_timer = 0.0
+            self._restart_frenzy_music()
 
     def update(self, dt):
         self.frames_count += 1
@@ -98,18 +116,15 @@ class CarreraDeObstaculos:
             self.last_fps_time = curr
 
         self.update_speed(dt)
+        self.update_autoplay()
         self.player.update()
         self.obstacle_manager.update(self.speed)
         
         if self.obstacle_manager.check_collision(self.player.rect):
             return "MENU" 
 
-        # GENERACIÓN CORREGIDA DE OBSTÁCULOS DIAGONALES
         if (self.score // 10) >= self.next_diagonal_trigger and not self.diagonal_obstacle:
             is_safe = True
-            
-            # Ahora comprobamos la distancia respecto al PUNTO DE APARICIÓN (S_WIDTH)
-            # para asegurarnos de que no spawnee justo encima o detrás de un obstáculo terrestre
             for obs in self.obstacle_manager.active:
                 if abs(obs.rect.x - self.S_WIDTH) < 380:
                     is_safe = False
@@ -133,6 +148,73 @@ class CarreraDeObstaculos:
         self.score += 1
         return None
 
+    def update_autoplay(self):
+        if not self.challenge_mode:
+            return
+
+        active_obs = [obs for obs in self.obstacle_manager.active if obs.rect.right > self.player.rect.left]
+        if self.diagonal_obstacle and self.diagonal_obstacle.rect.right > self.player.rect.left:
+            active_obs.append(self.diagonal_obstacle)
+        
+        active_obs.sort(key=lambda x: x.rect.left)
+
+        if not active_obs:
+            self.player.release_jump()
+            if self.player.rect.bottom < self.ground_y:
+                self.player.start_fast_fall()
+            return
+
+        first = active_obs[0]
+
+        if isinstance(first, DiagonalObstacle):
+            self.player.release_jump()
+            if self.player.rect.bottom < self.ground_y:
+                self.player.start_fast_fall()
+            return
+
+        # Detección de distancia corta entre obstáculos (~20 de separación)
+        has_short_gap = False
+        target_obs = first
+        cluster_end_x = first.rect.right
+
+        if len(active_obs) > 1 and not isinstance(active_obs[1], DiagonalObstacle):
+            gap = active_obs[1].rect.left - first.rect.right
+            if gap <= 35:
+                has_short_gap = True
+                target_obs = active_obs[1]  # Tomamos el SEGUNDO obstáculo como referencia
+                cluster_end_x = active_obs[1].rect.right
+
+        # Distancia al objetivo (al primero normalmente, o al segundo si hay distancia corta)
+        dist_to_target = target_obs.rect.left - self.player.rect.right
+
+        # Umbral: si hay espacio corto, salta antes (añadiendo la anticipación de 30)
+        if has_short_gap:
+            multiplier = 36 if self.boost_active else 32
+            jump_threshold = (self.speed * multiplier) + 30
+        else:
+            multiplier = 30 if self.boost_active else 26
+            jump_threshold = self.speed * multiplier
+
+        should_jump = (0 < dist_to_target <= jump_threshold)
+
+        if should_jump:
+            self.player.stop_fast_fall()
+            if self.player.rect.bottom >= self.ground_y:
+                self.player.jump()
+            else:
+                self.player.holding_jump = True
+
+        # Control de vuelo: mantiene el salto hasta rebasar por completo el último obstáculo del grupo
+        if self.player.rect.bottom < self.ground_y:
+            if self.player.rect.left < cluster_end_x + 10:
+                self.player.holding_jump = True
+            else:
+                self.player.release_jump()
+                self.player.start_fast_fall()
+        else:
+            self.player.release_jump()
+            self.player.stop_fast_fall()
+
     def draw(self):
         self.screen.fill((255, 255, 255))
         self.player.draw(self.screen)
@@ -149,6 +231,10 @@ class CarreraDeObstaculos:
         boost_state = "Modo Frenesí: ON" if self.boost_active else "Modo Frenesí: OFF"
         boost_text = self.font.render(boost_state, True, (220, 90, 0) if self.boost_active else (100, 100, 100))
         self.screen.blit(boost_text, (20, 56))
+
+        challenge_state = "Modo Prueba: ON" if self.challenge_mode else "Modo Prueba: OFF"
+        challenge_text = self.font.render(challenge_state, True, (0, 120, 220) if self.challenge_mode else (100, 100, 100))
+        self.screen.blit(challenge_text, (20, 86))
 
         if self.frenzy_alert_active:
             elapsed = self.frenzy_alert_timer

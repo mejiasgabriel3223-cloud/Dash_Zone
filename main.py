@@ -4,6 +4,7 @@ import sys
 from settings import S_WIDTH, S_HEIGHT, FPS
 from menu import EstadoMenu
 from game import CarreraDeObstaculos
+from audio import SoundPlayer
 
 
 def main():
@@ -12,8 +13,12 @@ def main():
     pygame.display.set_caption("Carrera de Obstáculos")
     clock = pygame.time.Clock()
 
+    sound_player = SoundPlayer()
     menu = EstadoMenu(screen)
     juego = CarreraDeObstaculos(screen)
+    juego.sound_player = sound_player
+    menu.sound_player = sound_player
+    sound_player.play_menu_music()
 
     estado_actual = "MENU"
     running = True
@@ -31,6 +36,7 @@ def main():
             if resultado == "JUGANDO":
                 juego.reset_game()
                 juego.player_name = menu.player_name
+                sound_player.play_game_music(0)
                 estado_actual = "JUGANDO"
             elif resultado == "SALIR":
                 running = False
@@ -48,6 +54,7 @@ def main():
                 estado_actual = "MENU"
                 score = juego.score // 10
                 menu.finalizar_partida(score, juego.player_name)
+                sound_player.play_menu_music()
 
             juego.draw()
 
